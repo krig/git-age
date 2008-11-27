@@ -27,7 +27,7 @@ def _makeurl(emailmd5, size):
     """
     gravatar_url =  "http://www.gravatar.com/avatar/"
     gravatar_url += emailmd5
-    gravatar_url += urllib.urlencode({'d':'monsterid', 's': str(size)})
+    gravatar_url += '?' + urllib.urlencode({'d':'monsterid', 's': str(size)})
     return gravatar_url
 
 def get(email = "someone@example.com",

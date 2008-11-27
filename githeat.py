@@ -16,6 +16,7 @@ import gobject
 import pango
 import gtksourceview2
 import time
+import Queue
 
 # TODO: move these two loads to threads
 # we can do the blame incrementally
@@ -23,7 +24,50 @@ class BlameLoader(threading.Thread):
     pass
 
 class GravatarLoader(threading.Thread):
-    pass
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.setDaemon(True)
+        self._inqueue = Queue.Queue()
+        self._outqueue = Queue.Queue()
+        self.gravatars = {}
+        self.latest_job = None
+
+    def run(self):
+        while True:
+            try:
+                job = self._inqueue.get()
+                if not job: continue
+                print "querying", job
+                item = gravatar.get(job)
+                if not item: continue
+                print "response", item
+                self._outqueue.put((job, item))
+            except Queue.Empty:
+                pass
+    def sync_update(self):
+        try:
+            job, item = self._outqueue.get(block=False)
+            if job:
+                self.gravatars[job] = item
+        except Queue.Empty:
+            pass
+    def query(self, job = None):
+        if not job:
+            if self.latest_job:
+                job = self.latest_job
+            else:
+                return None
+        item = self.gravatars.get(job)
+        if item:
+            if job == self.latest_job:
+                self.latest_job = None
+            print "got %s: %s" % (job, item)
+            return item
+        if self.latest_job != job:
+            print "fetching %s..." % (job)
+            self._inqueue.put(job)
+            self.latest_job = job
+        return None
 
 class BlamedFile(object):
     class Commit(object):
@@ -137,9 +181,10 @@ def main(fil):
     box.pack_start(scroll, expand=True, fill=True, padding=0)
     liststore = gtk.ListStore(str, str)
     treeview = gtk.TreeView(liststore)
-    col = gtk.TreeViewColumn("Key", gtk.CellRendererText(), text=0)
+    treeview.set_headers_visible(False)
+    col = gtk.TreeViewColumn(None, gtk.CellRendererText(), text=0)
     treeview.append_column(col)
-    col = gtk.TreeViewColumn("Value", gtk.CellRendererText(), text=1)
+    col = gtk.TreeViewColumn(None, gtk.CellRendererText(), text=1)
     treeview.append_column(col)
     scroll = gtk.ScrolledWindow()
     scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
@@ -149,9 +194,11 @@ def main(fil):
     box2.pack_start(scroll, expand=True, fill=True, padding=0)
     gravaimg = gtk.Button()
     image = gtk.Image()
-    image.set_from_file(gravatar.get("not.committed.yet"))
+    image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
     image.show()
     gravaimg.add(image)
+    gravaloader = GravatarLoader()
+    gravaloader.start()
 
     box2.pack_end(gravaimg, expand=False, fill=True, padding=0)
     box.pack_end(box2, expand=False, fill=True, padding=4)
@@ -163,7 +210,7 @@ def main(fil):
         age = min(max(age, 0), 100)
         r = 255 - (age/3)
         g = 252 - (age/3)
-        b = 250 - (age/3)
+        b = 248 - (age/3)
         return '#%02x%02x%02x'%(r,g,b)
 
     for age in range(101):
@@ -180,6 +227,16 @@ def main(fil):
         def __init__(self):
             self.current_commit = None
     tracker = CommitTracker()
+
+    def pop_from_queue():
+        gravaloader.sync_update()
+        gots = gravaloader.query()
+        if gots:
+            image.set_from_file(gots)
+            return False
+        else:
+            #print "waiting for",gravaloader.latest_job
+            return True
 
     def on_mark_set(buffer, param, param2, tracker):
         iter = buffer.get_iter_at_mark(buffer.get_insert())
@@ -198,15 +255,23 @@ def main(fil):
                         if commit.sha1 != '0'*40:
                             liststore.append(['SHA1', commit.sha1])
                         #set image to
-                        try:
-                            grava = gravatar.get(email=commit.author_mail[1:-1])
-                            image.set_from_file(grava)
-                        except IOError:
-                            grava = gravatar.get(email="not.committed.yet")
-                            image.set_from_file(grava)
+                        mail = commit.author_mail[1:-1]
+                        if mail == "not.committed.yet":
+                            image.set_from_stock(gtk.STOCK_DIALOG_WARNING, gtk.ICON_SIZE_LARGE_TOOLBAR)
+                        else:
+                            grava = gravaloader.query(commit.author_mail[1:-1])
+                            if grava:
+                                image.set_from_file(grava)
+                            else:
+                                gobject.timeout_add(500, pop_from_queue)
+                                image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
 
                         tracker.current_commit = commit
                         return
+        else:
+            tracker.current_commit = None
+            image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
+            liststore.clear()
 
     bufferS.connect_after('mark-set', on_mark_set, tracker)
 
