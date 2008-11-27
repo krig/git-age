@@ -6,6 +6,7 @@
 # on author and age etc. per line.
 import sys, subprocess
 import re
+import gravatar
 
 import pygtk
 pygtk.require('2.0')
@@ -14,6 +15,19 @@ import gobject
 import pango
 import gtksourceview2
 import time
+import Image
+import cStringIO
+
+def Image_to_GdkPixbuf (image):
+    file = cStringIO.StringIO ()
+    image.save (file, 'ppm')
+    contents = file.getvalue()
+    file.close ()
+    loader = gtk.gdk.PixbufLoader ('pnm')
+    loader.write (contents, len (contents))
+    pixbuf = loader.get_pixbuf ()
+    loader.close ()
+    return pixbuf
 
 class BlamedFile(object):
     class Commit(object):
@@ -135,7 +149,16 @@ def main(fil):
     scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
     scroll.add(treeview)
     scroll.set_property('height-request', 120)
-    box.pack_end(scroll, expand=False, fill=True, padding=4)
+    box2 = gtk.HBox()
+    box2.pack_start(scroll, expand=True, fill=True, padding=0)
+    gravaimg = gtk.Button()
+    image = gtk.Image()
+    image.set_from_pixbuf(Image_to_GdkPixbuf(Image.open(gravatar.get("not.committed.yet"))))
+    image.show()
+    gravaimg.add(image)
+
+    box2.pack_end(gravaimg, expand=False, fill=True, padding=0)
+    box.pack_end(box2, expand=False, fill=True, padding=4)
     win.add(box)
 
     bufferS.set_text(blamed.text)
@@ -143,43 +166,58 @@ def main(fil):
     def color_for_age(age):
         age = min(max(age, 0), 100)
         r = 255 - (age/3)
-        g = 255 - (age/3)
-        b = 255 - (age/3)
+        g = 252 - (age/3)
+        b = 250 - (age/3)
         return '#%02x%02x%02x'%(r,g,b)
 
     for age in range(101):
         # create marker type for age
         view.set_mark_category_background('age%d'%(age), gtk.gdk.color_parse(color_for_age(age)))
-    
+
     for y in range(len(blamed.lines)):
         age = blamed.lines[y].commit.age
         line_start = bufferS.get_iter_at_line(y)
-        bufferS.create_source_mark(None, 'age%d'%(age), line_start)
-    
+        mark = bufferS.create_source_mark(None, 'age%d'%(age), line_start)
+        setattr(mark, 'blameline', blamed.lines[y])
 
-#    def on_move_cursor(textview, step_size, count, extend_selection):
-#        buffer = textview.get_buffer()
+    class CommitTracker(object):
+        def __init__(self):
+            self.current_commit = None
+    tracker = CommitTracker()
 
-    def on_mark_set(buffer, param, param2):
+    def on_mark_set(buffer, param, param2, tracker):
         iter = buffer.get_iter_at_mark(buffer.get_insert())
-        liststore.clear()
-        if iter.get_line() < len(blamed.lines):
-            commit = blamed.lines[iter.get_line()].commit
-            if commit:
-                liststore.append(['Author', commit.author])
-                liststore.append(['Email', commit.author_mail])
-                liststore.append(['Time', time.ctime(commit.author_time)])
-                liststore.append(['Summary', commit.summary])
-                liststore.append(['SHA1', commit.sha1])
-            #for key, val in commit.__dict__.iteritems():
-            #    if key == 'author_time' or key == 'committer_time':
-            #        val = time.ctime(val)
-            #    liststore.append([key, val])
-        
-    
-#    view.connect_after('move-cursor', on_move_cursor)
-    bufferS.connect_after('mark-set', on_mark_set)
-    
+        marks = buffer.get_source_marks_at_line(iter.get_line(), None)
+        if marks:
+            for mark in marks:
+                if hasattr(mark, 'blameline'):
+                    blameline = getattr(mark, 'blameline')
+                    commit = blameline.commit
+                    if commit and tracker.current_commit is not commit:
+                        liststore.clear()
+                        liststore.append(['Author', commit.author])
+                        liststore.append(['Email', commit.author_mail])
+                        liststore.append(['Time', time.ctime(commit.author_time)])
+                        liststore.append(['Summary', commit.summary])
+                        if commit.sha1 != '0'*40:
+                            liststore.append(['SHA1', commit.sha1])
+                        #set image to
+                        try:
+                            grava = gravatar.get(email=commit.author_mail[1:-1])
+                            im = Image.open(grava)
+                            pixbuf = Image_to_GdkPixbuf(im)
+                            image.set_from_pixbuf(pixbuf)
+                        except:
+                            grava = gravatar.get(email="not.committed.yet")
+                            im = Image.open(grava)
+                            pixbuf = Image_to_GdkPixbuf(im)
+                            image.set_from_pixbuf(pixbuf)
+ 
+                        tracker.current_commit = commit
+                        return
+
+    bufferS.connect_after('mark-set', on_mark_set, tracker)
+
     win.show_all()
     win.resize(600,500)
     gtk.main()
