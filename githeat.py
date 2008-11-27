@@ -7,6 +7,7 @@
 import sys, subprocess
 import re
 import gravatar
+import threading
 
 import pygtk
 pygtk.require('2.0')
@@ -15,19 +16,14 @@ import gobject
 import pango
 import gtksourceview2
 import time
-import Image
-import cStringIO
 
-def Image_to_GdkPixbuf (image):
-    file = cStringIO.StringIO ()
-    image.save (file, 'ppm')
-    contents = file.getvalue()
-    file.close ()
-    loader = gtk.gdk.PixbufLoader ('pnm')
-    loader.write (contents, len (contents))
-    pixbuf = loader.get_pixbuf ()
-    loader.close ()
-    return pixbuf
+# TODO: move these two loads to threads
+# we can do the blame incrementally
+class BlameLoader(threading.Thread):
+    pass
+
+class GravatarLoader(threading.Thread):
+    pass
 
 class BlamedFile(object):
     class Commit(object):
@@ -61,6 +57,7 @@ class BlamedFile(object):
         beginline = re.compile(r'(\w{40})\s+(\d+)\s+(\d+)\s+(\d+)')
         currcommit = None
         for line in p.stdout:
+            print line
             bgm = beginline.match(line)
             if bgm:
                 sha1 = bgm.group(1)
@@ -109,7 +106,6 @@ class BlamedFile(object):
         else:
             for commit in self.commits:
                 commit.age = 100
-        #outerr = p.stderr.readlines()
 
 def main(fil):
     blamed = BlamedFile(fil)
@@ -153,7 +149,7 @@ def main(fil):
     box2.pack_start(scroll, expand=True, fill=True, padding=0)
     gravaimg = gtk.Button()
     image = gtk.Image()
-    image.set_from_pixbuf(Image_to_GdkPixbuf(Image.open(gravatar.get("not.committed.yet"))))
+    image.set_from_file(gravatar.get("not.committed.yet"))
     image.show()
     gravaimg.add(image)
 
@@ -204,15 +200,11 @@ def main(fil):
                         #set image to
                         try:
                             grava = gravatar.get(email=commit.author_mail[1:-1])
-                            im = Image.open(grava)
-                            pixbuf = Image_to_GdkPixbuf(im)
-                            image.set_from_pixbuf(pixbuf)
-                        except:
+                            image.set_from_file(grava)
+                        except IOError:
                             grava = gravatar.get(email="not.committed.yet")
-                            im = Image.open(grava)
-                            pixbuf = Image_to_GdkPixbuf(im)
-                            image.set_from_pixbuf(pixbuf)
- 
+                            image.set_from_file(grava)
+
                         tracker.current_commit = commit
                         return
 
