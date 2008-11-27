@@ -10,6 +10,7 @@ setup(
     zip_safe = True,
 
     install_requires = ["gtk+-2.0", "pygtksourceview-2.0", "pango", "gobject-2.0"],
+    scripts=['git-age'],
 
     # metadata for upload to PyPI
     author = "Kristoffer Gronlund",
