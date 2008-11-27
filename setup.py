@@ -9,7 +9,7 @@ setup(
     packages = find_packages(),
     zip_safe = True,
 
-    install_requires = ["gtk+-2.0", "pygtksourceview-2.0", "pango", "gobject-2.0"],
+    install_requires = ["pygtksourceview-2.0"],
     scripts=['git-age'],
 
     # metadata for upload to PyPI
@@ -17,7 +17,7 @@ setup(
     author_email = "kristoffer.gronlund@purplescout.se",
     description = "A git-blame viewer, written using PyGTK.",
     license = "GPL",
-    keywords = "hello world example examples",
+    keywords = "git viewer pygtk",
     url = "http://github.com/krig/git-age/wikis",
 )
 
