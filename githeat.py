@@ -89,7 +89,12 @@ class BlamedFile(object):
         self.lines = []
         self.view = view
         self.text = ''
-        self.filelines = open(fil).readlines()
+        try:
+            self.filelines = open(fil).readlines()
+        except IOError:
+            sys.stderr.write("Unable to open %s!\n"%(fil))
+            sys.exit(1)
+
         self.text = "".join(self.filelines)
         p = subprocess.Popen(["git-blame", "--incremental", fil],
                              shell=False,
@@ -100,6 +105,8 @@ class BlamedFile(object):
         for line in p.stdout:
             bgm = beginline.match(line)
             if bgm:
+                sys.stdout.write("\r%s" % (line.strip()))
+                sys.stdout.flush()
                 sha1 = bgm.group(1)
                 if self.sha1_to_commit.has_key(sha1):
                     currcommit = self.sha1_to_commit[sha1]
@@ -125,6 +132,8 @@ class BlamedFile(object):
                 if hasattr(currcommit, cmd):
                     assert getattr(currcommit, cmd) == data
                 setattr(currcommit, cmd, data)
+        sys.stdout.write('...OK.\n\n')
+        sys.stdout.flush()
 
         self.lines.sort(lambda x,y: cmp(x.resultline, y.resultline))
 
@@ -147,26 +156,6 @@ class BlamedFile(object):
             for commit in self.commits:
                 commit.age = 100
 
-# TODO: move these two loads to threads
-# we can do the blame incrementally
-class BlameLoader(threading.Thread):
-    def __init__(self, view, blamefile):
-        threading.Thread.__init__(self)
-        self.setDaemon(True)
-        self.blamefile = blamefile
-        self.view = view
-        self._outqueue = Queue.Queue()
-
-    def update_marks(self):
-        try:
-            blameline, sha1, commit = self._outqueue.get(block=False)
-            #y = blameline.
-        except Queue.Empty:
-            pass
-
-    def run(self):
-        pass
-
 def color_for_age(age):
     age = min(max(age, 0), 100)
     r = 255 - (age/3)
@@ -178,86 +167,100 @@ class CommitTracker(object):
     def __init__(self):
         self.current_commit = None
 
-def main(fil):
-    win = gtk.Window()
-    win.connect("destroy", lambda w: gtk.main_quit())
-    win.connect("delete_event", lambda w, e: gtk.main_quit())
+class MainWindow(gtk.Window):
+    def __init__(self):
+        gtk.Window.__init__(self)
+        self.connect('destroy', lambda w: gtk.main_quit())
+        self.connect('delete_event', lambda w, event: gtk.main_quit())
+        self.sourceview = None
+        self.sourcebuffer = None
+        self.langmanager = None
+        self.stylemanager = None
+        self.liststore = None
+        self.image = None
+        self.gravaloader = None
+        self.tracker = None
+        self.blamed = None
 
-    bufferS = gtksourceview2.Buffer()
-    manager = gtksourceview2.LanguageManager()
-    stylemanager = gtksourceview2.StyleSchemeManager()
-    if 'tango' in stylemanager.get_scheme_ids():
-        bufferS.set_style_scheme(stylemanager.get_scheme('tango'))
-    language = manager.guess_language(fil)
-    #langS.set_mime_types(["text/x-python"])
-    bufferS.set_language(language)
-    #bufferS.set_highlight(True)
-    view = gtksourceview2.View(bufferS)
-    view.set_show_line_numbers(True)
-    view.modify_font(pango.FontDescription('Monospace'))
+    def setup(self):
+        self.sourcebuffer = gtksourceview2.Buffer()
+        self.langmanager = gtksourceview2.LanguageManager()
+        self.stylemanager = gtksourceview2.StyleSchemeManager()
+        if 'tango' in self.stylemanager.get_scheme_ids():
+            self.sourcebuffer.set_style_scheme(self.stylemanager.get_scheme('tango'))
+        self.sourceview = gtksourceview2.View(self.sourcebuffer)
+        self.sourceview.set_show_line_numbers(True)
+        self.sourceview.modify_font(pango.FontDescription('Monospace'))
 
-    box = gtk.VBox()
-    scroll = gtk.ScrolledWindow()
-    scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    scroll.add(view)
-    box.pack_start(scroll, expand=True, fill=True, padding=0)
-    liststore = gtk.ListStore(str, str)
-    treeview = gtk.TreeView(liststore)
-    treeview.set_headers_visible(False)
-    col = gtk.TreeViewColumn(None, gtk.CellRendererText(), text=0)
-    treeview.append_column(col)
-    col = gtk.TreeViewColumn(None, gtk.CellRendererText(), text=1)
-    treeview.append_column(col)
-    scroll = gtk.ScrolledWindow()
-    scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    scroll.add(treeview)
-    scroll.set_property('height-request', 120)
-    box2 = gtk.HBox()
-    box2.pack_start(scroll, expand=True, fill=True, padding=0)
-    gravaimg = gtk.Button()
-    image = gtk.Image()
-    image.set_size_request(80, 80)
-    image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
-    image.show()
-    gravaimg.add(image)
-    gravaloader = GravatarLoader()
-    gravaloader.start()
+        box = gtk.VBox()
+        scroll = gtk.ScrolledWindow()
+        scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        scroll.add(self.sourceview)
+        box.pack_start(scroll, expand=True, fill=True, padding=0)
+        self.liststore = gtk.ListStore(str, str)
+        treeview = gtk.TreeView(self.liststore)
+        treeview.set_headers_visible(False)
+        col = gtk.TreeViewColumn(None, gtk.CellRendererText(), text=0)
+        treeview.append_column(col)
+        col = gtk.TreeViewColumn(None, gtk.CellRendererText(), text=1)
+        treeview.append_column(col)
+        scroll = gtk.ScrolledWindow()
+        scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        scroll.add(treeview)
+        scroll.set_property('height-request', 120)
+        box2 = gtk.HBox()
+        box2.pack_start(scroll, expand=True, fill=True, padding=0)
+        gravaimg = gtk.Button()
+        self.image = gtk.Image()
+        self.image.set_size_request(80, 80)
+        self.image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
+        self.image.show()
+        gravaimg.add(self.image)
+        self.gravaloader = GravatarLoader()
+        self.gravaloader.start()
 
-    box2.pack_end(gravaimg, expand=False, fill=True, padding=0)
-    box.pack_end(box2, expand=False, fill=True, padding=4)
-    win.add(box)
+        box2.pack_end(gravaimg, expand=False, fill=True, padding=0)
+        box.pack_end(box2, expand=False, fill=True, padding=4)
+        self.add(box)
 
-    blamed = BlamedFile(fil, view)
-    if not blamed.lines:
-        print "no lines to blame, sure this file is in a git repository?"
-        sys.exit(1)
+    def do_blame(self, fil):
+        language = self.langmanager.guess_language(fil)
+        self.sourcebuffer.set_language(language)
 
-    bufferS.set_text(blamed.text)
+        self.blamed = BlamedFile(fil, self.sourceview)
+        if not self.blamed.lines:
+            print "no lines to blame, sure this file is in a git repository?"
+            sys.exit(1)
 
-    for age in range(101):
-        # create marker type for age
-        view.set_mark_category_background('age%d'%(age), gtk.gdk.color_parse(color_for_age(age)))
+        self.sourcebuffer.set_text(self.blamed.text)
 
-    # TODO: do this for lines as they are loaded by loader thread
-    for y in range(len(blamed.lines)):
-        age = blamed.lines[y].commit.age
-        line_start = bufferS.get_iter_at_line(y)
-        mark = bufferS.create_source_mark(None, 'age%d'%(age), line_start)
-        setattr(mark, 'blameline', blamed.lines[y])
+        for age in range(101):
+            # create marker type for age
+            self.sourceview.set_mark_category_background('age%d'%(age), gtk.gdk.color_parse(color_for_age(age)))
 
-    tracker = CommitTracker()
+        # TODO: do this for lines as they are loaded by loader thread
+        for y in range(len(self.blamed.lines)):
+            age = self.blamed.lines[y].commit.age
+            line_start = self.sourcebuffer.get_iter_at_line(y)
+            mark = self.sourcebuffer.create_source_mark(None, 'age%d'%(age), line_start)
+            setattr(mark, 'blameline', self.blamed.lines[y])
 
-    def pop_from_queue():
-        gravaloader.sync_update()
-        gots = gravaloader.query()
+        self.tracker = CommitTracker()
+
+
+        self.sourcebuffer.connect_after('mark-set', self.on_mark_set, self.tracker)
+
+    def pop_from_queue(self):
+        self.gravaloader.sync_update()
+        gots = self.gravaloader.query()
         if gots:
-            image.set_from_file(gots)
+            self.image.set_from_file(gots)
             return False
         else:
-            #print "waiting for",gravaloader.latest_job
+            #print "waiting for",self.gravaloader.latest_job
             return True
 
-    def on_mark_set(buffer, param, param2, tracker):
+    def on_mark_set(self, buffer, param, param2, tracker):
         iter = buffer.get_iter_at_mark(buffer.get_insert())
         marks = buffer.get_source_marks_at_line(iter.get_line(), None)
         if marks:
@@ -266,36 +269,42 @@ def main(fil):
                     blameline = getattr(mark, 'blameline')
                     commit = blameline.commit
                     if commit and tracker.current_commit is not commit:
-                        liststore.clear()
-                        liststore.append(['Author', commit.author])
-                        liststore.append(['Email', commit.author_mail])
-                        liststore.append(['Time', time.ctime(commit.author_time)])
-                        liststore.append(['Summary', commit.summary])
+                        self.liststore.clear()
+                        self.liststore.append(['Author', commit.author])
+                        self.liststore.append(['Email', commit.author_mail])
+                        self.liststore.append(['Time', time.ctime(commit.author_time)])
+                        self.liststore.append(['Summary', commit.summary])
                         if commit.sha1 != '0'*40:
-                            liststore.append(['SHA1', commit.sha1])
+                            self.liststore.append(['SHA1', commit.sha1])
                         #set image to
                         mail = commit.author_mail[1:-1]
                         if mail == "not.committed.yet":
-                            image.set_from_stock(gtk.STOCK_DIALOG_WARNING, gtk.ICON_SIZE_LARGE_TOOLBAR)
+                            self.image.set_from_stock(gtk.STOCK_DIALOG_WARNING, gtk.ICON_SIZE_LARGE_TOOLBAR)
                         else:
-                            grava = gravaloader.query(commit.author_mail[1:-1])
+                            grava = self.gravaloader.query(commit.author_mail[1:-1])
                             if grava:
-                                image.set_from_file(grava)
+                                self.image.set_from_file(grava)
                             else:
-                                gobject.timeout_add(500, pop_from_queue)
-                                image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
+                                gobject.timeout_add(500, self.pop_from_queue)
+                                self.image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
 
                         tracker.current_commit = commit
                         return
         else:
             tracker.current_commit = None
-            image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
-            liststore.clear()
+            self.image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
+            self.liststore.clear()
 
-    bufferS.connect_after('mark-set', on_mark_set, tracker)
 
-    win.show_all()
+def main(fil):
+    win = MainWindow()
+    win.setup()
+
+    win.do_blame(fil)
+
     win.resize(600,500)
+    win.show_all()
+
     gtk.main()
 
 if __name__=="__main__":
