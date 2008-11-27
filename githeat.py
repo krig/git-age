@@ -49,6 +49,7 @@ class GravatarLoader(threading.Thread):
             job, item = self._outqueue.get(block=False)
             if job:
                 self.gravatars[job] = item
+                print "got %s: %s" % (job, item)
         except Queue.Empty:
             pass
     def query(self, job = None):
@@ -61,7 +62,6 @@ class GravatarLoader(threading.Thread):
         if item:
             if job == self.latest_job:
                 self.latest_job = None
-            print "got %s: %s" % (job, item)
             return item
         if self.latest_job != job:
             print "fetching %s..." % (job)
@@ -217,6 +217,7 @@ def main(fil):
         # create marker type for age
         view.set_mark_category_background('age%d'%(age), gtk.gdk.color_parse(color_for_age(age)))
 
+    # TODO: do this for lines as they are loaded by loader thread
     for y in range(len(blamed.lines)):
         age = blamed.lines[y].commit.age
         line_start = bufferS.get_iter_at_line(y)
