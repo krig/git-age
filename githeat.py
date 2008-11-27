@@ -18,10 +18,6 @@ import gtksourceview2
 import time
 import Queue
 
-# TODO: move these two loads to threads
-# we can do the blame incrementally
-class BlameLoader(threading.Thread):
-    pass
 
 class GravatarLoader(threading.Thread):
     def __init__(self):
@@ -87,13 +83,14 @@ class BlamedFile(object):
         def __repr__(self):
             return "<Line (%s/%d/%s) %s>" % (self.sourceline, self.resultline, self.num_lines, self.commit)
 
-    def __init__(self, fil):
+    def __init__(self, fil, view):
         self.sha1_to_commit = {}
         self.commits = []
         self.lines = []
+        self.view = view
         self.text = ''
-        filelines = open(fil).readlines()
-        self.text = "".join(filelines)
+        self.filelines = open(fil).readlines()
+        self.text = "".join(self.filelines)
         p = subprocess.Popen(["git-blame", "--incremental", fil],
                              shell=False,
                              stdout=subprocess.PIPE,
@@ -101,7 +98,6 @@ class BlamedFile(object):
         beginline = re.compile(r'(\w{40})\s+(\d+)\s+(\d+)\s+(\d+)')
         currcommit = None
         for line in p.stdout:
-            print line
             bgm = beginline.match(line)
             if bgm:
                 sha1 = bgm.group(1)
@@ -114,7 +110,7 @@ class BlamedFile(object):
                 sourceline = int(bgm.group(2))
                 resultline = int(bgm.group(3))
                 num_lines = int(bgm.group(4))
-                blameline = BlamedFile.Line(filelines[resultline-1], currcommit, sourceline, resultline, num_lines)
+                blameline = BlamedFile.Line(self.filelines[resultline-1], currcommit, sourceline, resultline, num_lines)
                 for _ in range(num_lines):
                     self.lines.append(blameline)
             elif currcommit:
@@ -151,12 +147,38 @@ class BlamedFile(object):
             for commit in self.commits:
                 commit.age = 100
 
-def main(fil):
-    blamed = BlamedFile(fil)
-    if not blamed.lines:
-        print "no lines to blame, sure this file is in a git repository?"
-        sys.exit(1)
+# TODO: move these two loads to threads
+# we can do the blame incrementally
+class BlameLoader(threading.Thread):
+    def __init__(self, view, blamefile):
+        threading.Thread.__init__(self)
+        self.setDaemon(True)
+        self.blamefile = blamefile
+        self.view = view
+        self._outqueue = Queue.Queue()
 
+    def update_marks(self):
+        try:
+            blameline, sha1, commit = self._outqueue.get(block=False)
+            #y = blameline.
+        except Queue.Empty:
+            pass
+
+    def run(self):
+        pass
+
+def color_for_age(age):
+    age = min(max(age, 0), 100)
+    r = 255 - (age/3)
+    g = 252 - (age/3)
+    b = 248 - (age/3)
+    return '#%02x%02x%02x'%(r,g,b)
+
+class CommitTracker(object):
+    def __init__(self):
+        self.current_commit = None
+
+def main(fil):
     win = gtk.Window()
     win.connect("destroy", lambda w: gtk.main_quit())
     win.connect("delete_event", lambda w, e: gtk.main_quit())
@@ -194,6 +216,7 @@ def main(fil):
     box2.pack_start(scroll, expand=True, fill=True, padding=0)
     gravaimg = gtk.Button()
     image = gtk.Image()
+    image.set_size_request(80, 80)
     image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
     image.show()
     gravaimg.add(image)
@@ -204,14 +227,12 @@ def main(fil):
     box.pack_end(box2, expand=False, fill=True, padding=4)
     win.add(box)
 
-    bufferS.set_text(blamed.text)
+    blamed = BlamedFile(fil, view)
+    if not blamed.lines:
+        print "no lines to blame, sure this file is in a git repository?"
+        sys.exit(1)
 
-    def color_for_age(age):
-        age = min(max(age, 0), 100)
-        r = 255 - (age/3)
-        g = 252 - (age/3)
-        b = 248 - (age/3)
-        return '#%02x%02x%02x'%(r,g,b)
+    bufferS.set_text(blamed.text)
 
     for age in range(101):
         # create marker type for age
@@ -224,9 +245,6 @@ def main(fil):
         mark = bufferS.create_source_mark(None, 'age%d'%(age), line_start)
         setattr(mark, 'blameline', blamed.lines[y])
 
-    class CommitTracker(object):
-        def __init__(self):
-            self.current_commit = None
     tracker = CommitTracker()
 
     def pop_from_queue():
