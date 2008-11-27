@@ -1,9 +1,13 @@
 #!/usr/bin/env python
-# githeat
+# githeat  Copyright (C) 2008  Kristoffer Gronlund
+#    This program comes with ABSOLUTELY NO WARRANTY; for details see LICENSE.
+#    This is free software, and you are welcome to redistribute it
+#    under certain conditions; see LICENSE for details.
+#
 # a git blame viewer
-# usage: githeat.py <file>
 # shows the file with annotations
 # on author and age etc. per line.
+#
 import sys, subprocess
 import re
 import gravatar
@@ -17,7 +21,6 @@ import pango
 import gtksourceview2
 import time
 import Queue
-
 
 class GravatarLoader(threading.Thread):
     def __init__(self):
@@ -307,8 +310,17 @@ def main(fil):
 
     gtk.main()
 
+def usage():
+    lic = """
+    githeat  Copyright (C) 2008  Kristoffer Gronlund
+    This program comes with ABSOLUTELY NO WARRANTY; for details see LICENSE.
+    This is free software, and you are welcome to redistribute it
+    under certain conditions; see LICENSE for details.
+"""
+    print "usage: %s <file>" % (sys.argv[0])
+    print lic
+    sys.exit(1)
+
 if __name__=="__main__":
-    if len(sys.argv) < 2:
-        print "usage: %s <file>" % (sys.argv[0])
-        sys.exit(1)
+    if len(sys.argv) < 2: usage()
     main(sys.argv[1])
