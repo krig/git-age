@@ -9,7 +9,7 @@ setup(
     packages = find_packages(),
     zip_safe = True,
 
-    install_requires = ["pygtksourceview-2.0"],
+    install_requires = [],
     scripts=['git-age'],
 
     # metadata for upload to PyPI
