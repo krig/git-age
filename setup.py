@@ -1,3 +1,6 @@
+import ez_setup
+ez_setup.use_setuptools()
+
 from setuptools import setup, find_packages
 
 setup(
@@ -5,6 +8,8 @@ setup(
     version = "0.1",
     packages = find_packages(),
     zip_safe = True,
+
+    install_requires = ["gtk+-2.0", "pygtksourceview-2.0", "pango", "gobject-2.0"],
 
     # metadata for upload to PyPI
     author = "Kristoffer Gronlund",
