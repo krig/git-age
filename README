@@ -1,0 +1,14 @@
+ git-age  Copyright (C) 2008  Kristoffer Gronlund
+ This program comes with ABSOLUTELY NO WARRANTY; for details see LICENSE.
+ This is free software, and you are welcome to redistribute it
+ under certain conditions; see LICENSE for details.
+
+A git-blame viewer, written using PyGTK.
+Shows the file with information on author, commit etc on each
+line. Also colors the background of the line darker for older commits
+and lighter for newer commits. Useful for quickly seeing what parts of
+a file have changed recently.
+
+Will also attempt to retrieve Gravatars for all authors in the file
+asynchronously.
+
