@@ -314,6 +314,12 @@ class MainWindow(gtk.Window):
 
 def main(fil):
     win = MainWindow()
+
+    from pkg_resources import resource_filename
+    iconfile = resource_filename(__name__, "data/peachy.svg")
+
+    if iconfile:
+        win.set_icon_from_file(iconfile)
     win.setup()
 
     win.do_blame(fil)

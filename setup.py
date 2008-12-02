@@ -7,6 +7,11 @@ setup(
     name = "git-age",
     version = "0.1",
     packages = find_packages(),
+    package_dir = {'':'.'},
+    package_data = {
+        'gitage': ['data/*.svg'],
+    },
+
     zip_safe = True,
 
     install_requires = [],
