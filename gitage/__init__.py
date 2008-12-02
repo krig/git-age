@@ -36,19 +36,17 @@ class GravatarLoader(threading.Thread):
             try:
                 job = self._inqueue.get()
                 if not job: continue
-                print "querying", job
                 item = gravatar.get(job)
                 if not item: continue
-                print "response", item
                 self._outqueue.put((job, item))
             except Queue.Empty:
                 pass
+
     def sync_update(self):
         try:
             job, item = self._outqueue.get(block=False)
             if job:
                 self.gravatars[job] = item
-                print "got %s: %s" % (job, item)
         except Queue.Empty:
             pass
     def query(self, job = None):
@@ -63,7 +61,6 @@ class GravatarLoader(threading.Thread):
                 self.latest_job = None
             return item
         if self.latest_job != job:
-            print "fetching %s..." % (job)
             self._inqueue.put(job)
             self.latest_job = job
         return None
@@ -195,6 +192,8 @@ class MainWindow(gtk.Window):
         self.sourceview.set_show_line_numbers(True)
         self.sourceview.modify_font(pango.FontDescription('Monospace'))
 
+        sidesplit = gtk.HPaned()
+
         box = gtk.VBox()
         scroll = gtk.ScrolledWindow()
         scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
@@ -224,7 +223,22 @@ class MainWindow(gtk.Window):
 
         box2.pack_end(gravaimg, expand=False, fill=True, padding=0)
         box.pack_end(box2, expand=False, fill=True, padding=4)
-        self.add(box)
+
+        sidesplit.pack1(box, resize=True)
+
+        sidelist = gtk.ListStore(str)
+        sidetree = gtk.TreeView(sidelist)
+        sidetree.set_headers_visible(False)
+        col = gtk.TreeViewColumn(None, gtk.CellRendererText(), text=0)
+        sidetree.append_column(col)
+        sidetree.set_size_request(160, -1)
+        sidelist.append(["Sidetree test"])
+
+        sidesplit.pack2(sidetree, resize=False)
+
+        sidesplit.set_position(-1)
+
+        self.add(sidesplit)
 
     def do_blame(self, fil):
         language = self.langmanager.guess_language(fil)
@@ -260,7 +274,6 @@ class MainWindow(gtk.Window):
             self.image.set_from_file(gots)
             return False
         else:
-            #print "waiting for",self.gravaloader.latest_job
             return True
 
     def on_mark_set(self, buffer, param, param2, tracker):
@@ -288,7 +301,7 @@ class MainWindow(gtk.Window):
                             if grava:
                                 self.image.set_from_file(grava)
                             else:
-                                gobject.timeout_add(500, self.pop_from_queue)
+                                gobject.idle_add(self.pop_from_queue)
                                 self.image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
 
                         tracker.current_commit = commit
@@ -308,6 +321,7 @@ def main(fil):
     win.resize(600,500)
     win.show_all()
 
+    gtk.gdk.threads_init()
     gtk.main()
 
 def usage():
