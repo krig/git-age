@@ -226,13 +226,12 @@ class MainWindow(gtk.Window):
 
         sidesplit.pack1(box, resize=True)
 
-        sidelist = gtk.ListStore(str)
-        sidetree = gtk.TreeView(sidelist)
+        self.sidelist = gtk.ListStore(str)
+        sidetree = gtk.TreeView(self.sidelist)
         sidetree.set_headers_visible(False)
         col = gtk.TreeViewColumn(None, gtk.CellRendererText(), text=0)
         sidetree.append_column(col)
         sidetree.set_size_request(160, -1)
-        sidelist.append(["Sidetree test"])
 
         sidesplit.pack2(sidetree, resize=False)
 
@@ -266,6 +265,13 @@ class MainWindow(gtk.Window):
 
 
         self.sourcebuffer.connect_after('mark-set', self.on_mark_set, self.tracker)
+
+        authors = set()
+        for c in self.blamed.commits:
+            authors.add(c.author)
+        for a in authors:
+            self.sidelist.append([a])
+
 
     def pop_from_queue(self):
         self.gravaloader.sync_update()
