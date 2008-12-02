@@ -266,12 +266,8 @@ class MainWindow(gtk.Window):
 
         self.sourcebuffer.connect_after('mark-set', self.on_mark_set, self.tracker)
 
-        authors = set()
-        for c in self.blamed.commits:
-            authors.add(c.author)
-        for a in authors:
+        for a in set(c.author for c in self.blamed.commits):
             self.sidelist.append([a])
-
 
     def pop_from_queue(self):
         self.gravaloader.sync_update()
