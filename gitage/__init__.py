@@ -90,12 +90,16 @@ class BlamedFile(object):
         self.view = view
         self.text = ''
         try:
+            sys.stdout.write("\rparsing %s..." % (fil))
+            sys.stdout.flush()
             self.filelines = open(fil).readlines()
         except IOError:
             sys.stderr.write("Unable to open %s!\n"%(fil))
             sys.exit(1)
 
         self.text = "".join(self.filelines)
+        sys.stdout.write("\rgit-blame --incremental %s" % (fil))
+        sys.stdout.flush()
         p = subprocess.Popen(["git-blame", "--incremental", fil],
                              shell=False,
                              stdout=subprocess.PIPE,
@@ -132,7 +136,7 @@ class BlamedFile(object):
                 if hasattr(currcommit, cmd):
                     assert getattr(currcommit, cmd) == data
                 setattr(currcommit, cmd, data)
-        sys.stdout.write('...OK.\n\n')
+        sys.stdout.write('...OK.\n')
         sys.stdout.flush()
 
         self.lines.sort(lambda x,y: cmp(x.resultline, y.resultline))
@@ -159,8 +163,8 @@ class BlamedFile(object):
 def color_for_age(age):
     age = min(max(age, 0), 100)
     r = 255 - (age/3)
-    g = 252 - (age/3)
-    b = 248 - (age/3)
+    g = 247 - (age/3)
+    b = 241 - (age/3)
     return '#%02x%02x%02x'%(r,g,b)
 
 class CommitTracker(object):
@@ -181,6 +185,7 @@ class MainWindow(gtk.Window):
         self.gravaloader = None
         self.tracker = None
         self.blamed = None
+        self.sidelist = None
 
     def setup(self):
         self.sourcebuffer = gtksourceview2.Buffer()
@@ -228,8 +233,8 @@ class MainWindow(gtk.Window):
 
         self.sidelist = gtk.ListStore(str)
         sidetree = gtk.TreeView(self.sidelist)
-        sidetree.set_headers_visible(False)
-        col = gtk.TreeViewColumn(None, gtk.CellRendererText(), text=0)
+        #sidetree.set_headers_visible(False)
+        col = gtk.TreeViewColumn("Authors", gtk.CellRendererText(), text=0)
         sidetree.append_column(col)
         sidetree.set_size_request(160, -1)
 
@@ -266,8 +271,17 @@ class MainWindow(gtk.Window):
 
         self.sourcebuffer.connect_after('mark-set', self.on_mark_set, self.tracker)
 
-        for a in set(c.author for c in self.blamed.commits):
-            self.sidelist.append([a])
+        authdata = dict()
+        for c in self.blamed.commits:
+            if authdata.has_key(c.author):
+                authdata[c.author][1] += 1
+            else:
+                authdata[c.author] = [0, 1]
+        for line in self.blamed.lines:
+            if line.commit:
+                authdata[line.commit.author][0] += line.num_lines
+        for a, llist in authdata.iteritems():
+            self.sidelist.append(["%s (%d lines, %d commits)" % (a, llist[0], llist[1])])
 
     def pop_from_queue(self):
         self.gravaloader.sync_update()
