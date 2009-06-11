@@ -98,9 +98,9 @@ class BlamedFile(object):
             sys.exit(1)
 
         self.text = "".join(self.filelines)
-        sys.stdout.write("\rgit-blame --incremental %s" % (fil))
+        sys.stdout.write("\rgit blame --incremental %s" % (fil))
         sys.stdout.flush()
-        p = subprocess.Popen(["git-blame", "--incremental", fil],
+        p = subprocess.Popen(["git", "blame", "--incremental", fil],
                              shell=False,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
