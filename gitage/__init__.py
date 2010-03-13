@@ -21,6 +21,7 @@ import pango
 import gtksourceview2
 import time
 import Queue
+import platform
 
 class GravatarLoader(threading.Thread):
     def __init__(self):
@@ -253,7 +254,11 @@ class MainWindow(gtk.Window):
             print "no lines to blame, sure this file is in a git repository?"
             sys.exit(1)
 
-        self.sourcebuffer.set_text(self.blamed.text)
+        if platform.system() == 'Windows':
+            self.sourcebuffer.set_text(unicode(self.blamed.text,"iso-8859-1"))
+        else:
+            self.sourcebuffer.set_text(self.blamed.text)
+
 
         for age in range(101):
             # create marker type for age
@@ -332,10 +337,16 @@ def main(fil):
     win = MainWindow()
 
     from pkg_resources import resource_filename
-    iconfile = resource_filename(__name__, "data/peachy.svg")
+    if platform.system() == 'Windows':
+        iconfile = resource_filename(__name__, "data/peachy.ico")
+    else:
+        iconfile = resource_filename(__name__, "data/peachy.svg")
 
     if iconfile:
-        win.set_icon_from_file(iconfile)
+        try:
+            win.set_icon_from_file(iconfile)
+        except Exception, e:
+            print e
     win.setup()
 
     win.do_blame(fil)
