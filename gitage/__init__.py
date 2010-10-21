@@ -195,6 +195,7 @@ class MainWindow(gtk.Window):
         if 'tango' in self.stylemanager.get_scheme_ids():
             self.sourcebuffer.set_style_scheme(self.stylemanager.get_scheme('tango'))
         self.sourceview = gtksourceview2.View(self.sourcebuffer)
+        self.sourceview.set_editable(False)
         self.sourceview.set_show_line_numbers(True)
         self.sourceview.modify_font(pango.FontDescription('Monospace'))
 
