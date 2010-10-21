@@ -240,6 +240,7 @@ class MainWindow(gtk.Window):
         renderer.set_property("ellipsize", pango.ELLIPSIZE_END)
         col = gtk.TreeViewColumn("Authors", renderer, text=0)
         sidetree.append_column(col)
+        sidetree.set_tooltip_column(0)
         sidetree.set_size_request(160, -1)
 
         sidesplit.pack2(sidetree, resize=False)
