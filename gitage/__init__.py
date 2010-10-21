@@ -236,7 +236,9 @@ class MainWindow(gtk.Window):
         self.sidelist = gtk.ListStore(str)
         sidetree = gtk.TreeView(self.sidelist)
         #sidetree.set_headers_visible(False)
-        col = gtk.TreeViewColumn("Authors", gtk.CellRendererText(), text=0)
+        renderer = gtk.CellRendererText()
+        renderer.set_property("ellipsize", pango.ELLIPSIZE_END)
+        col = gtk.TreeViewColumn("Authors", renderer, text=0)
         sidetree.append_column(col)
         sidetree.set_size_request(160, -1)
 
