@@ -300,38 +300,44 @@ class MainWindow(gtk.Window):
     def on_mark_set(self, buffer, param, param2, tracker):
         iter = buffer.get_iter_at_mark(buffer.get_insert())
         marks = buffer.get_source_marks_at_line(iter.get_line(), None)
-        if marks:
-            for mark in marks:
-                if hasattr(mark, 'blameline'):
-                    blameline = getattr(mark, 'blameline')
-                    commit = blameline.commit
-                    if commit and tracker.current_commit is not commit:
-                        self.liststore.clear()
-                        self.liststore.append(['Author', commit.author])
-                        self.liststore.append(['Email', commit.author_mail])
-                        self.liststore.append(['Time', time.ctime(commit.author_time)])
-                        self.liststore.append(['Summary', commit.summary])
-                        if commit.sha1 != '0'*40:
-                            self.liststore.append(['SHA1', commit.sha1])
-                        #set image to
-                        mail = commit.author_mail[1:-1]
-                        if mail == "not.committed.yet":
-                            self.image.set_from_stock(gtk.STOCK_DIALOG_WARNING, gtk.ICON_SIZE_LARGE_TOOLBAR)
-                        else:
-                            grava = self.gravaloader.query(commit.author_mail[1:-1])
-                            if grava:
-                                self.image.set_from_file(grava)
-                            else:
-                                gobject.idle_add(self.pop_from_queue)
-                                self.image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
-
-                        tracker.current_commit = commit
-                        return
-        else:
+        if not marks:
             tracker.current_commit = None
             self.image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
             self.liststore.clear()
+            return
 
+        for mark in marks:
+            if not hasattr(mark, 'blameline'):
+                continue
+
+            blameline = getattr(mark, 'blameline')
+            commit = blameline.commit
+            if not commit or tracker.current_commit is commit:
+                continue
+
+            self.liststore.clear()
+            self.liststore.append(['Author', commit.author])
+            self.liststore.append(['Email', commit.author_mail])
+            self.liststore.append(['Time', time.ctime(commit.author_time)])
+            self.liststore.append(['Summary', commit.summary])
+
+            if commit.sha1 != '0'*40:
+                self.liststore.append(['SHA1', commit.sha1])
+
+            #set image to
+            mail = commit.author_mail[1:-1]
+            if mail == "not.committed.yet":
+                self.image.set_from_stock(gtk.STOCK_DIALOG_WARNING, gtk.ICON_SIZE_LARGE_TOOLBAR)
+            else:
+                grava = self.gravaloader.query(commit.author_mail[1:-1])
+                if grava:
+                    self.image.set_from_file(grava)
+                else:
+                    gobject.idle_add(self.pop_from_queue)
+                    self.image.set_from_stock(gtk.STOCK_MISSING_IMAGE, gtk.ICON_SIZE_LARGE_TOOLBAR)
+
+            tracker.current_commit = commit
+            break
 
 def main(fil):
     win = MainWindow()
