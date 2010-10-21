@@ -161,11 +161,19 @@ class BlamedFile(object):
             for commit in self.commits:
                 commit.age = 100
 
-def color_for_age(age):
+    def get_commit(self, sha1):
+        return self.sha1_to_commit.get(sha1)
+
+def color_for_age(age, author=False):
     age = min(max(age, 0), 100)
-    r = 255 - (age/3)
-    g = 247 - (age/3)
-    b = 241 - (age/3)
+    if author:
+        r = 195 - (age/3)
+        g = 247 - (age/3)
+        b = 181 - (age/3)
+    else:
+        r = 255 - (age/3)
+        g = 247 - (age/3)
+        b = 241 - (age/3)
     return '#%02x%02x%02x'%(r,g,b)
 
 class CommitTracker(object):
@@ -233,8 +241,9 @@ class MainWindow(gtk.Window):
 
         sidesplit.pack1(box, resize=True)
 
-        self.sidelist = gtk.ListStore(str)
+        self.sidelist = gtk.ListStore(str, str)
         sidetree = gtk.TreeView(self.sidelist)
+        sidetree.connect("button-press-event", self.on_authors_clicked)
         #sidetree.set_headers_visible(False)
         renderer = gtk.CellRendererText()
         renderer.set_property("ellipsize", pango.ELLIPSIZE_END)
@@ -248,6 +257,42 @@ class MainWindow(gtk.Window):
         sidesplit.set_position(-1)
 
         self.add(sidesplit)
+
+    def on_authors_clicked(self, tv, event):
+        selection = tv.get_selection()
+        store, paths = selection.get_selected_rows()
+        selected_author = None
+
+        if paths:
+            it = store.get_iter(paths[0])
+            selected_author = store.get_value(it, 1)
+
+        try:
+            path, column, pos_x, pos_y = tv.get_path_at_pos(int(event.x), int(event.y))
+        except:
+            return False
+
+        it = store.get_iter(path)
+        clicked_author = store.get_value(it, 1)
+
+        if clicked_author == selected_author:
+            selection.unselect_path(path)
+            self.update_blame_lines()
+            return True
+
+        self.update_blame_lines(clicked_author)
+
+        return False
+
+    def update_blame_lines(self, author=None):
+        for y in range(len(self.blamed.lines)):
+            line_start = self.sourcebuffer.get_iter_at_line(y)
+            if author and self.blamed.get_commit(self.blamed.lines[y].commit.sha1).author == author:
+                age = 'author-age%d' % self.blamed.lines[y].commit.age
+            else:
+                age = 'age%d' % self.blamed.lines[y].commit.age
+            mark = self.sourcebuffer.create_source_mark(None, age, line_start)
+            setattr(mark, 'blameline', self.blamed.lines[y])
 
     def do_blame(self, fil):
         language = self.langmanager.guess_language(fil)
@@ -267,13 +312,11 @@ class MainWindow(gtk.Window):
         for age in range(101):
             # create marker type for age
             self.sourceview.set_mark_category_background('age%d'%(age), gtk.gdk.color_parse(color_for_age(age)))
+            self.sourceview.set_mark_category_background('author-age%d'%(age), gtk.gdk.color_parse(color_for_age(age, author=True)))
+
 
         # TODO: do this for lines as they are loaded by loader thread
-        for y in range(len(self.blamed.lines)):
-            age = self.blamed.lines[y].commit.age
-            line_start = self.sourcebuffer.get_iter_at_line(y)
-            mark = self.sourcebuffer.create_source_mark(None, 'age%d'%(age), line_start)
-            setattr(mark, 'blameline', self.blamed.lines[y])
+        self.update_blame_lines()
 
         self.tracker = CommitTracker()
 
@@ -290,7 +333,7 @@ class MainWindow(gtk.Window):
             if line.commit:
                 authdata[line.commit.author][0] += line.num_lines
         for a, llist in authdata.iteritems():
-            self.sidelist.append(["%s (%d lines, %d commits)" % (a, llist[0], llist[1])])
+            self.sidelist.append(["%s (%d lines, %d commits)" % (a, llist[0], llist[1]), a])
 
     def pop_from_queue(self):
         self.gravaloader.sync_update()
