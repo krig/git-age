@@ -408,6 +408,7 @@ def main(fil):
     win.show_all()
 
     gtk.gdk.threads_init()
+    gtk.gdk.threads_enter()
     gtk.main()
 
 def usage():
