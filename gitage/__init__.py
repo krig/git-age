@@ -404,6 +404,7 @@ def main(fil):
 
     win.do_blame(fil)
 
+    win.set_title("git-age")
     win.resize(600,500)
     win.show_all()
 
