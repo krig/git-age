@@ -9,7 +9,7 @@ setup(
     packages = find_packages(),
     package_dir = {'':'.'},
     package_data = {
-        'gitage': ['data/*.svg'],
+        'gitage': ['data/*'],
     },
 
     zip_safe = True,

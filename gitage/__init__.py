@@ -404,10 +404,12 @@ def main(fil):
 
     win.do_blame(fil)
 
+    win.set_title("git-age")
     win.resize(600,500)
     win.show_all()
 
     gtk.gdk.threads_init()
+    gtk.gdk.threads_enter()
     gtk.main()
 
 def usage():
