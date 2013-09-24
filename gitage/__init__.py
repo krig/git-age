@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # git-age  Copyright (C) 2008  Kristoffer Gronlund
 #    This program comes with ABSOLUTELY NO WARRANTY; for details see LICENSE.
 #    This is free software, and you are welcome to redistribute it
